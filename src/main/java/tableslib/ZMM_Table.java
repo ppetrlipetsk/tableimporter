@@ -18,24 +18,28 @@ public class ZMM_Table extends TTable {
         return QueryRepository.getZMMDeleteQuery().replace("@potrebnost_pen@",keys[0]).replace("@pozitsiya_potrebnosti_pen@",keys[1]);
     }
 
-    @Override
+    //@Override
+/*
     public String getAddedLinesQuery() {
         return QueryRepository.getZMMAddedLines();
     }
+*/
 
+/*
     @Override
     public String getDifferenceViewQuery() {
         return QueryRepository.getZMMDifferenceView();
     }
+*/
 
-    @Override
+//    @Override
     public String getDeletedRecordsQuery(String changedRecords) {
         String query=QueryRepository.getZMMDeletedLines();
         if (changedRecords.length()==0) changedRecords="'null'";
         return query.replace("@dataset@",changedRecords);
     }
 
-    @Override
+  //  @Override
     public String getImportDifferenceRecordsQuery(String range) {
         if (range.length()==0) range="'null'";
         return QueryRepository.getZMMImportDifRecords().replace("@range@",range);

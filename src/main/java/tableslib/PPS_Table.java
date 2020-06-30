@@ -20,6 +20,7 @@ public class PPS_Table extends TTable {
         return QueryRepository.getPPSDeleteQuery().replace("@idn@",keys[0]);
     }
 
+/*
     @Override
     public String getAddedLinesQuery() {
         return QueryRepository.getPPSAddedLines();
@@ -37,11 +38,14 @@ public class PPS_Table extends TTable {
         query=query.replace("@dataset@",changedRecords);
         return query;
     }
-
+*/
+/*
     @Override
     public String getImportDifferenceRecordsQuery(String range) {
         return QueryRepository.getPPSImportDifRecords().replace("@range@",range);
     }
+*/
+
 
     @Override
     protected String getUpdateQueryFromTable(ResultSet resultSet) throws SQLException {

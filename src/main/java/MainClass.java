@@ -18,6 +18,7 @@ import java.util.*;
 
 public class MainClass {
     public static void main(String[] args) {
+        ImportProcessor importProcessor=new ImportProcessor();
         try {
             if (!ApplicationInitializer.initApplication(args)) {
                 System.out.println("Инициализация пограммы прошла с ошибкой!");
@@ -25,8 +26,6 @@ public class MainClass {
             } else {
                 Logger.putLineToLog(ApplicationGlobals.getAPPLOGName(), "Начало работы программы импорта: " + new Date().toString(), true);
                 ProgramMesssages.putProgramParamsToLog();
-
-                ImportProcessor importProcessor=new ImportProcessor();
                 HashMap<String, FieldType> aliases;
                 HashMap<String, ImportProcessor.FieldStateType> changedRecords;
                 LinkedList<String> deletedRecords;
@@ -38,17 +37,21 @@ public class MainClass {
 
                         table.setAliases(aliases);
 
-                        changedRecords=importProcessor.getChangedRecords(table);
+                        //changedRecords=importProcessor.getChangedRecords(table);
+                        changedRecords=importProcessor.getChangedRecords(ProgramParameters.getParameterValue("sourcetable"), ProgramParameters.getParameterValue("destinationtable"),"id","LTRIM(STR(potrebnost_pen)) + '_' + LTRIM(RTRIM(STR(pozitsiya_potrebnosti_pen))) AS idn", "idn");
 
-                        importProcessor.detectAddedRecords(changedRecords,table);
+                        importProcessor.detectAddedRecords(changedRecords,ProgramParameters.getParameterValue("sourcetable"), ProgramParameters.getParameterValue("destinationtable"),"id","LTRIM(STR(potrebnost_pen)) + '_' + LTRIM(RTRIM(STR(pozitsiya_potrebnosti_pen))) AS idn", "idn");
 
-                        deletedRecords=importProcessor.detectDeletedRecords(changedRecords,table);
+                        deletedRecords=importProcessor.detectDeletedRecords(ProgramParameters.getParameterValue("sourcetable"), ProgramParameters.getParameterValue("destinationtable"),"id","LTRIM(STR(potrebnost_pen)) + '_' + LTRIM(RTRIM(STR(pozitsiya_potrebnosti_pen))) AS idn", "idn",changedRecords);
 
                         // MessagesClass.importProcessMessageBegin();
 
-                        importProcessor.changeRecords(changedRecords, table);
+                        int[] counts=importProcessor.changeRecords(changedRecords, table,ProgramParameters.getParameterValue("sourcetable"),"id","LTRIM(STR(potrebnost_pen)) + '_' + LTRIM(RTRIM(STR(pozitsiya_potrebnosti_pen))) AS idn");
 
-                        importProcessor.delRecords(deletedRecords,table);
+                        int delCount=importProcessor.delRecords(deletedRecords,table);
+
+                        Logger.putLineToLog(ApplicationGlobals.getAPPLOGName(), "Изменено:" + counts[1]+", добавлено:" +counts[0]+", удалено:"+delCount+" записей. \n Импорт завершен успешно.", true);
+                        Logger.putLineToLog(ApplicationGlobals.getAPPLOGName(), "Время завершения:" + new Date().toString(), true);
 
                         //MessagesClass.importProcessMessageEnd();
 
@@ -59,8 +62,6 @@ public class MainClass {
                     }
                 }
 
-                //Logger.putLineToLog(ApplicationGlobals.getAPPLOGName(), "Импортировано:" + importProcessor.getRowCount() + " записей. \n Импорт завершен успешно.", true);
-                Logger.putLineToLog(ApplicationGlobals.getAPPLOGName(), "Время завершения:" + new Date().toString(), true);
         } catch (Exception e) {
             Logger.putLineToLog(ApplicationGlobals.getERRORLOGName(), "Импорт завершен с ошибками.\nСообщение об ошибке:" + e.toString(), true);
         }

@@ -2,296 +2,134 @@ package businesslib;
 
 import com.ppsdevelopment.jdbcprocessor.DataBaseConnector;
 import com.ppsdevelopment.jdbcprocessor.DataBaseProcessor;
-import com.ppsdevelopment.loglib.Logger;
 import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldType;
 import envinronment.QueryRepository;
-import loglib.ErrorsClass;
-import loglib.MessagesClass;
-import tableslib.ITableRouter;
 import tableslib.TTable;
+import tableslib.TableHelper;
 import tableslib.TableTools;
-
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.Map;
 
 public class ImportProcessor {
     protected final String QUOTES_SYMBOL="'";
 
-    public  HashMap<String, FieldType> getAliases(String destinationTable)  {
 
+    public  HashMap<String, FieldType> getAliases(String destinationTable) throws SQLException {
         String query=QueryRepository.getAliasesQuery().replace("@tablename@",destinationTable);
-        AliasesLoader aliasesLoader=new AliasesLoader();
+        HashMap<String, FieldType> aliases=new HashMap<>();
+        try(DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection())) {
+            ResultSet resultSet=dp.query(query);
+            if ((resultSet!=null)) {
+                while (resultSet.next()) {
+                    String fieldalias = resultSet.getString("fieldalias");
+                    FieldType fieldType = TableTools.detectFieldType(resultSet.getString("fieldtype"));
+                    aliases.put(fieldalias, fieldType);
+                }
+            }
 
-        try {
-            DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
-            dp.query(query,aliasesLoader);
         } catch (SQLException e) {
-            e.printStackTrace();
-//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения псевдонимов полей.", true);
-//            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения псевдонимов полей.\n"+e.getMessage()+"\n QUERY="+query, true);
+            throw new SQLException("Ошибка чтения псевдонимов полей.\n"+e.getMessage()+"\n QUERY="+query);
         }
-        return aliasesLoader.getAliases();
+        return aliases;
     }
-
-    public HashMap<String, FieldStateType> getChangedRecords(TTable table) {
-        String query=table.getDifferenceViewQuery();
-        HashMap<String, FieldStateType> changedRecords=null;
-        DifferenceSelectCallBack differenceSelectCallBack=new DifferenceSelectCallBack();
-        try {
-            DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
-            dp.query(query,differenceSelectCallBack);
-            changedRecords=differenceSelectCallBack.getChangedRecords();
-
+//TODO сделать проверку на существование таблиц и на соответствие полей.
+    public HashMap<String, FieldStateType> getChangedRecords(String sourceTable, String destinationTable, String removedId, String keyExpression, String idn) throws Exception {
+        String query=TableHelper.generateChangedQuery(sourceTable,destinationTable,removedId, keyExpression);
+        HashMap<String, FieldStateType> changedRecords=new HashMap<>();
+        try(DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());) {
+            ResultSet resultSet=dp.query(query);
+            if ((resultSet!=null)){
+                while (resultSet.next()) {
+                    changedRecords.put(resultSet.getString(idn),FieldStateType.UPDATE);
+                }
+            }
         } catch (SQLException e) {
-            e.printStackTrace();
-//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения представления, содержащего измененные записи.", true);
-//            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения представления, содержащего измененные записи.\n"+e.getMessage()+"\n QUERY="+query, true);
+            throw new Exception("Ошибка чтения представления, содержащего измененные записи."+e.getMessage()+". QUERY="+query);
         }
         return changedRecords;
     }
 
-    public void detectAddedRecords(HashMap<String,FieldStateType> changedRecords, TTable table) throws SQLException {
-        //String query=QueryRepository.getZMMAddedLines();
-        String query=table.getAddedLinesQuery();
-        try {
-            DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
-
-            AddedSelectCallBack addedSelectCallBack=new AddedSelectCallBack(changedRecords);
-            dp.query(query,addedSelectCallBack);
+    public  HashMap<String,FieldStateType> detectAddedRecords(HashMap<String, FieldStateType> changedRecords, String sourceTable, String DestinationTable, String removedField, String idExpression, String id) throws Exception {
+        String query=TableHelper.getAddedRecordsQuery( sourceTable,  DestinationTable,  removedField,  idExpression,  id);
+        try (DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());){
+            ResultSet resultSet=dp.query(query);
+            if ((resultSet!=null)){
+                    while (resultSet.next()) {
+                        changedRecords.put(resultSet.getString("idn"),FieldStateType.INSERT);
+                    }
+            }
         } catch (SQLException e) {
-            //ErrorsClass.addedRecordsViewReadError(e,query);
+            throw new Exception("Ошибка определения добавленных записей. Сообщение об ошибке:"+e.toString()+" \nQuery:"+query);
         }
+        return changedRecords;
     }
 
-    public LinkedList<String> detectDeletedRecords(HashMap<String,FieldStateType> changedRecords, TTable table) throws SQLException {
-
-        String query=table.getDeletedRecordsQuery(getDiffValuesStr(changedRecords,QUOTES_SYMBOL));
-
-        LinkedList<String> deletedLines=null;
-        try {
-            DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
-            DeletedSelectCallBack deletedSelectCallBack= new DeletedSelectCallBack();
-            dp.query(query,deletedSelectCallBack);
-            deletedLines=deletedSelectCallBack.getDeletedRecords();
-        } catch (SQLException e) {
-            //ErrorsClass.deletedRecordsViewReadError(e,query);
+    public LinkedList<String> detectDeletedRecords(String sourceTable, String destinationTable, String removedField, String idExpression, String id,HashMap<String,FieldStateType> changedRecords) throws Exception {
+        String query=QueryRepository.getDeletedRecordsDetectQuery();
+        String destinationIdnView=TableHelper.getIdnViewQuery(destinationTable,removedField,idExpression);
+        String sourceIdnView=TableHelper.getIdnViewQuery(sourceTable,removedField,idExpression);
+        query=query.replace("%source_idn_view%",sourceIdnView).replace("%destination_idn_view%",destinationIdnView).replace("%dataset%",TableHelper.getDiffValuesStr(changedRecords,QUOTES_SYMBOL));
+        LinkedList<String> deletedLines=new LinkedList<>();
+        try (DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());) {
+            ResultSet resultSet = dp.query(query);
+            if ((resultSet != null)) {
+                while (resultSet.next()) {
+                    deletedLines.add(resultSet.getString(id));
+                }
+            }
+        }
+        catch (Exception e){
+            throw new Exception("Ошибка определения удаленных записей. Сообщение об ошибке:"+e.toString()+" Query:"+query);
         }
         return deletedLines;
     }
 
-    public boolean changeRecords(HashMap<String,FieldStateType> changedRecords, TTable table) {
+
+    public int[] changeRecords(HashMap<String, FieldStateType> changedRecords, TTable table, String sourcetable, String removedFields, String idExpression) throws Exception {
         //Выбираем только те записи, которые новые или измененные в таблице импорта
-        String query=table.getImportDifferenceRecordsQuery(getDiffValuesStr(changedRecords,QUOTES_SYMBOL));
+        //String query=table.getImportDifferenceRecordsQuery(getDiffValuesStr(changedRecords,QUOTES_SYMBOL));
+        int addedCount=0;
+        int changedCount=0;
+        String query=QueryRepository.getDestinationImportDifferenceRecords();
+        String view=TableHelper.getIdnViewQuery(sourcetable,removedFields,idExpression);
+        query=query.replace("%import_idn_view%",view).replace("%range%",TableHelper.getDiffValuesStr(changedRecords,QUOTES_SYMBOL));
         DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
         try {
-            dp.query(query,new ImportRecords(changedRecords, table));
-            //DBEngine.resultExpression(query, new ImportRecords(changedRecords, table));
-        } catch (SQLException e) {
-            //ErrorsClass.changeRecordsError(e,query);
-        }
-        return false;
-    }
-
-    public int delRecords(LinkedList<String> deletedRecords, TTable table) {
-        int count=0;
-        for(String idn:deletedRecords){
-            String[] keys=table.getKeys(idn);
-            if (table.deleteLine(keys)) count++;
-        }
-        //MessagesClass.deletedRecordCountMessage(count);
-        return count;
-    }
-
-
-    /**
-     * Возвражает строку ключей, записей, попавших в выборку разницы таблицы импорта и действующей таблицы
-     * @return
-     */
-    public String getDiffValuesStr(HashMap<String, FieldStateType> changedRecords,String quotes) {
-        StringBuilder line=new StringBuilder();
-        for (Map.Entry<String, FieldStateType> entry : changedRecords.entrySet()) {
-            if (line.length()>0) line.append(",");
-            String key=entry.getKey();
-            //if (key!=null)
-            line.append("'").append(key).append("'");
-//            else
-//                line.append("null");
-
-        }
-        return line.toString();
-    }
-
-
-
-    /** Класс, реализующий интерфейс ResultSetCallBackMethod, реализует механизм получения списка псевдонимов из
-     * набора данных результата выполнения запроса.
-     * Возвращает набор псевдонимов типа HashMap<String, FieldType>
-      */
-    private class AliasesLoader implements DataBaseProcessor.ResultSetCallBack {
-        private HashMap<String, FieldType> aliases;
-
-        public HashMap<String, FieldType> getAliases() {
-            return aliases;
-        }
-
-        public AliasesLoader() {
-            this.aliases = new HashMap<>();
-        }
-
-        @Override
-        public void call(ResultSet resultSet) throws SQLException {
+            ResultSet resultSet=dp.query(query);
             if ((resultSet!=null)){
-                try {
                     while (resultSet.next()) {
-                        String fieldalias=resultSet.getString("fieldalias");
-                        FieldType fieldType=TableTools.detectFieldType(resultSet.getString("fieldtype"));
-                        aliases.put(fieldalias, fieldType);
-                    }
-                }
-                catch (SQLException e){
-//                    Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения поля FIELDALIAS записи БД, при чтении таблицы псевдонимов полей." , true);
-//                    Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения поля FIELDALIAS записи БД, при чтении таблицы псевдонимов полей. \n"+e.getMessage(), true);
-                    throw new SQLException(e);
-                }
-            }
-  //          Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Чтение таблицы псевдонимов полей... Найдено:"+aliases.size() , true);
-        }
-    }
-
-
-    class DifferenceSelectCallBack implements DataBaseProcessor.ResultSetCallBack {
-        private HashMap<String, FieldStateType> changedRecords;
-
-        public DifferenceSelectCallBack() {
-            this.changedRecords = new HashMap<>();
-        }
-
-        public HashMap<String, FieldStateType> getChangedRecords() {
-            return changedRecords;
-        }
-
-        @Override
-        public void call(ResultSet resultSet) throws SQLException {
-            if ((resultSet!=null)){
-                try {
-                    while (resultSet.next()) {
-                        changedRecords.put(resultSet.getString("idn"),FieldStateType.UPDATE);
-                    }
-                }
-                catch (SQLException e){
-                    e.printStackTrace();
-//                    Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения поля IDN записи БД." , true);
-//                    Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения поля IDN записи БД \n"+e.getMessage(), true);
-                    throw new SQLException(e);
-                }
-            }
-//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Определение измененных записей-OK \nНайдено:"+ changedRecords.size(), true);
-        }
-    }
-
-    class AddedSelectCallBack implements DataBaseProcessor.ResultSetCallBack {
-        private HashMap<String, FieldStateType> changedRecords;
-
-        public AddedSelectCallBack(HashMap<String, FieldStateType> changedRecords) {
-            this.changedRecords = changedRecords;
-        }
-
-        public HashMap<String, FieldStateType> getChangedRecords() {
-            return changedRecords;
-        }
-
-        @Override
-        public void call(ResultSet resultSet) throws SQLException {
-            int count=0;
-            if ((resultSet!=null)){
-                try {
-                    while (resultSet.next()) {
-                        changedRecords.put(resultSet.getString("idn"),FieldStateType.INSERT);
-                        count++;
-                    }
-                }
-                catch (SQLException e){
-                    //loglib.ErrorsClass.fieldReadErrorLog(e);
-                }
-                //loglib.MessagesClass.addedFieldsMessage(count);
-            }
-            //else
-                //loglib.MessagesClass.noAddedFieldsMessage();
-
-        }
-    }
-
-    class DeletedSelectCallBack implements DataBaseProcessor.ResultSetCallBack {
-        private LinkedList<String> deletedRecords;
-
-        public DeletedSelectCallBack() {
-            this.deletedRecords=new LinkedList<>();
-        }
-
-        public LinkedList<String> getDeletedRecords() {
-            return deletedRecords;
-        }
-
-        @Override
-        public void call(ResultSet resultSet) throws SQLException {
-            if ((resultSet!=null)){
-                int count=0;
-                try {
-                    while (resultSet.next()) {
-                        deletedRecords.add(resultSet.getString("idn"));
-                        count++;
-
-                    }
-                }
-                catch (SQLException e){
-                    //ErrorsClass.deletedRecordsReadError(e);
-                }
-//                MessagesClass.deletedRecordsMessage(count);
-            }
-        }
-    }
-
-    private class ImportRecords implements DataBaseProcessor.ResultSetCallBack {
-        private HashMap<String, FieldStateType> changedRecords;
-        ITableRouter tableRouter;
-
-        public ImportRecords(HashMap<String, FieldStateType> changedRecords, ITableRouter tableRouter) {
-            this.changedRecords = changedRecords;
-            this.tableRouter = tableRouter;
-        }
-
-        @Override
-        public void call(ResultSet resultSet) throws SQLException {
-            String idn="";
-            int countUpdate=0;
-            int countAdd=0;
-            if ((resultSet!=null)){
-                try {
-                    while (resultSet.next()) {
-                        idn= resultSet.getString("idn");
+                        String idn= resultSet.getString("idn");
                         FieldStateType fieldType=changedRecords.get(idn);
                         if (FieldStateType.INSERT==fieldType){
-                            tableRouter.insertRecord(resultSet);
-                            countAdd++;
+                            table.insertRecord(resultSet);
+                            addedCount++;
                         }
                         else{
                             if (FieldStateType.UPDATE==fieldType){
-                                tableRouter.updateRecord(resultSet);
-                                countUpdate++;
+                                table.updateRecord(resultSet);
+                                changedCount++;
                             }
                         }
                     }
                 }
-                catch (SQLException e){
-//                    ErrorsClass.recordUpdateError(e, idn);
-                }
-  //              MessagesClass.updateRecordsCountMessage(countUpdate);
-    //            MessagesClass.insertRecordsCountMessage(countAdd);
+        }
+        catch (SQLException e) {
+            throw new Exception("Ошибка изменения записи таблицы БД. Сообщение об ошибке:"+e.toString()+" \n QUERY="+query);
+        }
+        return new int[]{addedCount,changedCount};
+    }
+
+    public int delRecords(LinkedList<String> deletedRecords, TTable table) throws Exception {
+        int count=0;
+        if (deletedRecords!=null) {
+            for (String idn : deletedRecords) {
+                String[] keys = table.getKeys(idn);
+                if (table.deleteLine(keys)) count++;
             }
         }
+        return count;
     }
 
     public enum FieldStateType{

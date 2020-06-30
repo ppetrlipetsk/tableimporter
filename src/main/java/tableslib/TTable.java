@@ -4,6 +4,7 @@ import com.ppsdevelopment.jdbcprocessor.DataBaseConnector;
 import com.ppsdevelopment.jdbcprocessor.DataBaseProcessor;
 import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldType;
 import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldTypeDefines;
+import envinronment.QueryRepository;
 import loglib.ErrorsClass;
 
 import java.net.ConnectException;
@@ -55,9 +56,9 @@ public abstract class TTable  implements ITableRouter {
             String fieldName=alias.getKey();
             String c=resultSet.getString(fieldName);
             FieldType fieldType=alias.getValue();
-            if (fieldName.equals("potrebnost_pen"))
-                if (c.equals("4000052290"))
-                System.out.println("stop");
+//            if (fieldName.equals("potrebnost_pen"))
+//                if (c.equals("4000052290"))
+//                System.out.println("stop");
 
 
             if (valuesStr.length()>0){
@@ -70,7 +71,7 @@ public abstract class TTable  implements ITableRouter {
     }
 
     protected String getFieldValueStr(FieldType fieldType,String valueStr ){
-        String mask= FieldTypeDefines.getTypesFieldDBMask().get(fieldType);
+        String mask= FieldTypeDefines.getFieldMaskStrByType(fieldType);
         if (valueStr==null)
             return "null";
         else
@@ -78,34 +79,21 @@ public abstract class TTable  implements ITableRouter {
     }
 
     @Override
-    public boolean updateRecord(ResultSet resultSet) {
-        String values= null;
-
+    public boolean updateRecord(ResultSet resultSet) throws Exception {
+        String values;
         try {
             values = getUpdateQueryValues(resultSet);
-        } catch (SQLException e) {
-            e.printStackTrace();
-//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка гененирования строки запроса обновления записи.", true);
-//            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка гененирования строки запроса обновления записи. \n"+e.getMessage(), true);
-            return false;
-
-        }
-
-        try {
             String query=getUpdateQueryFromTable(resultSet).replace("@values@",values);
             DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
             dp.exec(query);
         } catch (SQLException | ConnectException e) {
-            e.printStackTrace();
-//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка обновления строки.", true);
-//            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка обновления строки.\n"+e.getMessage(), true);
-            return false;
+            throw new Exception("Ошибка обновления строки."+e.getMessage());
         }
         return true;
     }
 
     @Override
-    public void insertRecord(ResultSet resultSet) {
+    public void insertRecord(ResultSet resultSet) throws Exception {
         StringBuilder fieldsStr=new StringBuilder();
         StringBuilder valuesStr=new StringBuilder();
         generateInsertQueryArguments(resultSet, fieldsStr, valuesStr);
@@ -115,22 +103,19 @@ public abstract class TTable  implements ITableRouter {
             String query = getInsertQueryStr(fieldsStr, valuesStr);
             dp.exec(query);
         } catch (SQLException | ConnectException e) {
-            //ErrorsClass.recordInsertError(e);
+            throw new Exception("Ошибка добавления строки."+e.getMessage());
         }
     }
 
     @Override
-    public boolean deleteLine(String[] keys) {
+    public boolean deleteLine(String[] keys) throws Exception {
         String query=getDeleteLineQuery(keys);
         try {
             DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
             dp.exec(query);
-            //Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Запись IDN="+keys.toString()+" успешно удалена.", true);
         } catch (SQLException | ConnectException e) {
             e.printStackTrace();
-//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка удаления записи. IDN="+keys.toString(), true);
-//            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка удаления записи.IDN="+keys.toString()+e.getMessage()+"\n QUERY="+query, true);
-            return false;
+            throw new Exception("Ошибка удаления строки."+e.getMessage());
         }
         return true;
     }
@@ -139,6 +124,7 @@ public abstract class TTable  implements ITableRouter {
 
     abstract String getDeleteLineQuery(String[] keys);
 
+/*
     public abstract String getDifferenceViewQuery();
 
     public abstract String getAddedLinesQuery();
@@ -146,6 +132,7 @@ public abstract class TTable  implements ITableRouter {
     public abstract String getDeletedRecordsQuery(String changedRecords);
 
     public abstract String getImportDifferenceRecordsQuery(String range);
+*/
 
     protected abstract String getUpdateQueryFromTable(ResultSet resultSet) throws SQLException;
 

@@ -19,21 +19,18 @@ public class QueryRepository {
                 " SELECT [idn] FROM [dogc].[dbo].[zmm_idn_view]";
     }
 
-//    public static String getZMMAddedLines(){
-//        return "  SELECT [idn] FROM getAddedZMM()";
-//    }
-
-
     public static String getZMMDeletedLines() {
         return "select idn, deleted from ( SELECT * FROM zmm_idn_view EXCEPT" +
                 " SELECT  * FROM zmm_import_idn_view ) i1 " +
                 " where  (deleted is null or deleted=0) and idn not in (@dataset@)";
-//        return "select idn, deleted from zmm_deleted_view "+
-//                " where idn not in (@dataset@) and (deleted is null or deleted=0)";
     }
 
     public static String getZMMImportDifRecords(){
         return "select * from [dogc].[dbo].zmm_import_idn_view where idn in (@range@)";
+    }
+
+    public static String getDestinationImportDifferenceRecords(){
+        return "select * from (%import_idn_view%) i1 where idn in (%range%)";
     }
 
     public static String getZMMDeleteQuery(){
@@ -87,6 +84,38 @@ public class QueryRepository {
         return "INSERT INTO [dbo].[ppz] (@fields@) values (@values@)";
     }
 
+    public static String getDeletedRecordsDetectQuery(){
+        return "select idn, deleted from ( %destination_idn_view% i2 \n EXCEPT \n" +
+                " %source_idn_view% i1) i3  \n" +
+                " where  (deleted is null or deleted=0) and idn not in (%dataset%)";
+    }
+
+    public static String getAddedRecordsQuery(){
+        return "SELECT [idn] FROM (%difference_view%) dv" +
+                " except" +
+                " SELECT [idn] FROM (%idn_view%) iv";
+    }
+
+    public static String getTableFieldsQuery(String table){
+        return "SELECT  c.name as fname FROM    syscolumns c\n" +
+                "INNER JOIN systypes t ON c.xtype = t.xtype and c.usertype = t.usertype\n" +
+                "                WHERE   c.id = OBJECT_ID('"+table+"') order by fname";
+    }
+/*
+    public static String getChangedFieldsQuery(String fieldsList, String fieldsList2, String tableOne, String tableTwo){
+        return "SELECT        *\n" +
+                "FROM            \n(SELECT "+
+                fieldsList+
+                " FROM "+tableOne+
+                ")\n i1 EXCEPT \n" +
+                " SELECT *  FROM  (\nSELECT "+fieldsList2+ " \nFROM "+tableTwo+") i2";
+    }
+*/
+
+    public static String getIdnDifferenceViewQuery(String idnview_from, String idnview_to){
+        return ("SELECT        idn FROM (%idnview_from%\n EXCEPT \n" +
+                " %idnview_to%) i1").replace("%idnview_from%",idnview_from).replace("%idnview_to%",idnview_to);
+    }
 
 
 }
