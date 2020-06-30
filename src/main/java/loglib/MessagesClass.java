@@ -1,8 +1,12 @@
 package loglib;
 
+import com.ppsdevelopment.loglib.Logger;
+
 import java.util.Date;
 
 public class MessagesClass {
+
+/*
     public static void addedFieldsMessage(int count) {
         Logger.putLineToLogs(new String[] {Logger.APPLOG}, "в т.ч. добавлено:"+count, true);
     }
@@ -46,4 +50,5 @@ public class MessagesClass {
         String fdate=new Date().toString();
         Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Начало работы программы импорта: "+fdate, true);
     }
+*/
 }

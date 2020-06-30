@@ -2,7 +2,11 @@ package loglib;
 
 import java.sql.SQLException;
 
+import com.ppsdevelopment.loglib.Logger;
+
+
 public class ErrorsClass {
+    /*
     public static void fieldReadErrorLog(SQLException e) throws SQLException {
         Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения поля IDN записи БД, при чтении записей представления, содержащего измененные записи таблицы." , true);
         Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения поля IDN записи БД, при чтении записей представления, содержащего измененные записи таблицы. \n"+e.getMessage(), true);
@@ -50,5 +54,5 @@ public class ErrorsClass {
     public static void tableClassNewInstanceError() {
         Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка создания экземпляра класса таблицы.", true);
         Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка создания экземпляра класса таблицы.", true);
-    }
+    }*/
 }

@@ -5,162 +5,92 @@
  */
 
 import businesslib.ImportProcessor;
-import databaselib.DBSettings;
-import defines.ApplicationConfig;
-import defines.FieldTypeDefines;
-import loglib.ErrorsClass;
-import loglib.Logger;
-import loglib.MessagesClass;
+import com.ppsdevelopment.jdbcprocessor.DataBaseConnector;
+import com.ppsdevelopment.loglib.Logger;
+import com.ppsdevelopment.programparameters.ProgramParameters;
+import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldType;
+import envinronment.*;
 import tableslib.TTable;
-import typeslib.tparameter;
-
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.sql.SQLException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.Map;
+import java.util.*;
 
 public class MainClass {
-    public static final int LINESLIMIT = 2; // Буфер
-    private static final String ERRORLOGFILENAME = "errorlog.log";
-    private static final String APPLOGFILENAME = "applog.log";
-    private static final String ERRORLOG = "errorlog";
-    private static final String APPLOG = "applog";
-
-
-    private static Map<String, tparameter> parameters;
-    static{
-        parameters=new HashMap<>();
-        parameters.put("sourcetable",new tparameter("",true));
-        parameters.put("destinationtable",new tparameter("",true));
-        parameters.put(APPLOG,new tparameter(APPLOGFILENAME,false));
-        parameters.put(ERRORLOG,new tparameter(ERRORLOGFILENAME,false));
-        parameters.put("tableclass",new tparameter("tableclass",true));
-    }
-
-
     public static void main(String[] args) {
-        ImportProcessor importProcessor=new ImportProcessor();
-        HashMap<String, FieldTypeDefines.FieldType> aliases;
-        HashMap<String, ImportProcessor.FieldStateType> changedRecords;
-        LinkedList<String> deletedRecords;
-        Class<tableslib.TTable> tableClass;
-        TTable table;
+        try {
+            if (!ApplicationInitializer.initApplication(args)) {
+                System.out.println("Инициализация пограммы прошла с ошибкой!");
+                ProgramMesssages.showAppParams();
+            } else {
+                Logger.putLineToLog(ApplicationGlobals.getAPPLOGName(), "Начало работы программы импорта: " + new Date().toString(), true);
+                ProgramMesssages.putProgramParamsToLog();
 
-        if (args.length==0){
-            MessagesClass.showAppParams();
-        }
-        else {
+                ImportProcessor importProcessor=new ImportProcessor();
+                HashMap<String, FieldType> aliases;
+                HashMap<String, ImportProcessor.FieldStateType> changedRecords;
+                LinkedList<String> deletedRecords;
+                TTable table=createTableInstance(ProgramParameters.getParameterValue("tableclass"));
+                if (table!=null) {
+                    try {
 
-            if (!parseProgramParameters(args)) return;
+                        aliases=importProcessor.getAliases(table.getDestinationTable());
 
-            if (!initLogClass()) return;
+                        table.setAliases(aliases);
 
-            MessagesClass.putDateToLog();
+                        changedRecords=importProcessor.getChangedRecords(table);
 
-            if (!ApplicationConfig.initApplicationValues()) return;
+                        importProcessor.detectAddedRecords(changedRecords,table);
 
-            table=createTableInstance();
+                        deletedRecords=importProcessor.detectDeletedRecords(changedRecords,table);
 
-            if ((table!=null &&dataBaseConnection())) {
+                        // MessagesClass.importProcessMessageBegin();
 
-                try {
+                        importProcessor.changeRecords(changedRecords, table);
 
-                    aliases=importProcessor.getAliases(table.getDestinationTable());
+                        importProcessor.delRecords(deletedRecords,table);
 
-                    table.setAliases(aliases);
+                        //MessagesClass.importProcessMessageEnd();
 
-                    changedRecords=importProcessor.getChangedRecords(table);
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                    }
 
-                    importProcessor.detectAddedRecords(changedRecords,table);
-
-                    deletedRecords=importProcessor.detectDeletedRecords(changedRecords,table);
-
-                    MessagesClass.importProcessMessageBegin();
-
-                    importProcessor.changeRecords(changedRecords, table);
-
-                    importProcessor.delRecords(deletedRecords,table);
-
-                    MessagesClass.importProcessMessageEnd();
-
-                } catch (SQLException e) {
-                    e.printStackTrace();
+                    }
                 }
 
-            }
-            loglib.Logger.closeAll();
+                //Logger.putLineToLog(ApplicationGlobals.getAPPLOGName(), "Импортировано:" + importProcessor.getRowCount() + " записей. \n Импорт завершен успешно.", true);
+                Logger.putLineToLog(ApplicationGlobals.getAPPLOGName(), "Время завершения:" + new Date().toString(), true);
+        } catch (Exception e) {
+            Logger.putLineToLog(ApplicationGlobals.getERRORLOGName(), "Импорт завершен с ошибками.\nСообщение об ошибке:" + e.toString(), true);
         }
+        finally {
+            try {
+                DataBaseConnector.close();
+                Logger.closeAll();
+            } catch (SQLException e) {
+                System.out.println("Ошибка закрытия соединения с БД. Сообщение об ошибке:" + e.toString());
+            }
+            catch (IOException e){
+                System.out.println("Ошибка закрытия файлов журналов. Сообщение об ошибке:"+e.toString());
+            }
+        }
+
     }
 
-    private static TTable createTableInstance() {
+    static TTable createTableInstance(String className) throws Exception {
         Class<TTable> tableClass;
-        TTable table=null;
-        String className=parameters.get("tableclass").getValue();
+        TTable table;
+        if ((className==null)||(className.length()==0))
+            throw new Exception("Ошибка создания класса "+className);
         Class[] params={String.class};
-
         try {
             tableClass= (Class<TTable>) Class.forName("tableslib."+className);
-            table = (TTable) tableClass.getConstructor(params).newInstance(parameters.get("destinationtable").getValue());
+            table = tableClass.getConstructor(params).newInstance(ProgramParameters.getParameterValue("destinationtable"));
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException | ClassNotFoundException e){
-            e.printStackTrace();
-            ErrorsClass.tableClassNewInstanceError();
+            throw new Exception("Ошибка создания класса "+className);
         }
         return table;
     }
-
-    private static boolean initLogClass() {
-        new loglib.Logger(Logger.ERRORLOG,parameters.get(ERRORLOG).getValue(),LINESLIMIT);
-        new loglib.Logger(Logger.APPLOG,parameters.get(APPLOG).getValue(), LINESLIMIT);
-        try {
-            loglib.Logger.getLogger(Logger.ERRORLOG).init();
-            loglib.Logger.getLogger(Logger.APPLOG).init();
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.out.println("Ошибка инициализации системы логгирования. Аварийное завершение работы.");
-            return false;
-        }
-        return true;
-    }
-
-    private static boolean parseProgramParameters(String[] args) {
-
-        for( String arg:args){
-            String[] par=arg.split("=");
-            if ((par==null)||(par.length!=2)||!parameters.containsKey(par[0])) {
-                //loglib.Logger.putLineToLogs(new String[] {"ErrorLog","AppLog"},"Ошибка параметра "+par,true);
-                System.out.println("Ошибка параметра "+par);
-                return false;
-            }
-            parameters.get(par[0]).setValue(par[1]);
-        }
-
-        Iterator<Map.Entry<String, tparameter>> entries = parameters.entrySet().iterator();
-        while (entries.hasNext()) {
-            Map.Entry<String, tparameter> entry = entries.next();
-            String s=entry.getValue().getValue();
-            if ((s.length()==0)&&(entry.getValue().isRequire())) {
-                System.out.println("Ошибка параметра "+entry.getKey());
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean dataBaseConnection() {
-        try {
-            databaselib.DBEngine.connectDB(DBSettings.connectionUrl,DBSettings.userName,DBSettings.pass,DBSettings.instanceName,DBSettings.databaseName);
-            loglib.Logger.getLogger(Logger.APPLOG).put("Соединение с БД:"+DBSettings.instanceName+":SUCCESS\n",true);
-            return true;
-        }
-        catch (Exception e){
-            loglib.Logger.getLogger(Logger.APPLOG).putLine("Ошибка подключения к БД...",true);
-            loglib.Logger.getLogger(Logger.ERRORLOG).putLine("Ошибка подключения к БД..."+DBSettings.instanceName);
-        }
-        return false;
-    }
-
 
 }

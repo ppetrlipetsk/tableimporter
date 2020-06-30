@@ -1,14 +1,15 @@
 package tableslib;
 
-import defines.FieldTypeDefines;
+import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldType;
+import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldTypeDefines;
 
 public class TableTools {
-    public static FieldTypeDefines.FieldType detectFieldType(String fieldtype) {
-        return FieldTypeDefines.FieldType.valueOf(fieldtype);
+    public static FieldType detectFieldType(String fieldtype) {
+        return FieldType.valueOf(fieldtype);
     }
 
-    private String getFieldValueStr(FieldTypeDefines.FieldType fieldType,String valueStr ){
-        String mask=FieldTypeDefines.getTypesFieldDBMask().get(fieldType);
+    private String getFieldValueStr(FieldType fieldType, String valueStr ){
+        String mask= FieldTypeDefines.getTypesFieldDBMask().get(fieldType);
         if (valueStr==null)
             return "null";
         else

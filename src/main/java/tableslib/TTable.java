@@ -1,18 +1,21 @@
 package tableslib;
 
-import databaselib.DBEngine;
-import defines.FieldTypeDefines;
+import com.ppsdevelopment.jdbcprocessor.DataBaseConnector;
+import com.ppsdevelopment.jdbcprocessor.DataBaseProcessor;
+import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldType;
+import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldTypeDefines;
 import loglib.ErrorsClass;
-import loglib.Logger;
+
+import java.net.ConnectException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 
 public abstract class TTable  implements ITableRouter {
     private final String destinationTable;
-    private HashMap<String, FieldTypeDefines.FieldType> aliases=new HashMap<>();
+    private HashMap<String, FieldType> aliases=new HashMap<>();
 
-    public void setAliases(HashMap<String, FieldTypeDefines.FieldType> aliases) {
+    public void setAliases(HashMap<String, FieldType> aliases) {
         this.aliases = aliases;
     }
 
@@ -26,9 +29,9 @@ public abstract class TTable  implements ITableRouter {
     }
 
     protected boolean generateInsertQueryArguments(ResultSet resultSet, StringBuilder fieldsStr, StringBuilder valuesStr) {
-        for (Map.Entry<String, FieldTypeDefines.FieldType> alias: aliases.entrySet()){
+        for (Map.Entry<String, FieldType> alias: aliases.entrySet()){
             String fieldName=alias.getKey();
-            FieldTypeDefines.FieldType fieldType=alias.getValue();
+            FieldType fieldType=alias.getValue();
             if (fieldsStr.length()>0)fieldsStr.append(",");
             fieldsStr.append(fieldName);
             if (valuesStr.length()>0)valuesStr.append(",");
@@ -36,8 +39,8 @@ public abstract class TTable  implements ITableRouter {
                 valuesStr.append(getFieldValueStr(fieldType,resultSet.getString(fieldName)));
             } catch (SQLException e) {
                 e.printStackTrace();
-                Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка генерирования выражения вставки строки. FieldName="+fieldName, true);
-                Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка генерирования выражения вставки строки. FieldName="+fieldName+"\n"+e.getMessage(), true);
+//                Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка генерирования выражения вставки строки. FieldName="+fieldName, true);
+//                Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка генерирования выражения вставки строки. FieldName="+fieldName+"\n"+e.getMessage(), true);
                 return false;
             }
         }
@@ -48,10 +51,10 @@ public abstract class TTable  implements ITableRouter {
 
         StringBuilder valuesStr=new StringBuilder();
 
-        for (Map.Entry<String, FieldTypeDefines.FieldType> alias: aliases.entrySet()){
+        for (Map.Entry<String, FieldType> alias: aliases.entrySet()){
             String fieldName=alias.getKey();
             String c=resultSet.getString(fieldName);
-            FieldTypeDefines.FieldType fieldType=alias.getValue();
+            FieldType fieldType=alias.getValue();
             if (fieldName.equals("potrebnost_pen"))
                 if (c.equals("4000052290"))
                 System.out.println("stop");
@@ -66,8 +69,8 @@ public abstract class TTable  implements ITableRouter {
         return valuesStr.toString();
     }
 
-    protected String getFieldValueStr(FieldTypeDefines.FieldType fieldType,String valueStr ){
-        String mask=FieldTypeDefines.getTypesFieldDBMask().get(fieldType);
+    protected String getFieldValueStr(FieldType fieldType,String valueStr ){
+        String mask= FieldTypeDefines.getTypesFieldDBMask().get(fieldType);
         if (valueStr==null)
             return "null";
         else
@@ -82,21 +85,20 @@ public abstract class TTable  implements ITableRouter {
             values = getUpdateQueryValues(resultSet);
         } catch (SQLException e) {
             e.printStackTrace();
-            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка гененирования строки запроса обновления записи.", true);
-            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка гененирования строки запроса обновления записи. \n"+e.getMessage(), true);
+//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка гененирования строки запроса обновления записи.", true);
+//            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка гененирования строки запроса обновления записи. \n"+e.getMessage(), true);
             return false;
 
         }
 
         try {
-
             String query=getUpdateQueryFromTable(resultSet).replace("@values@",values);
-            DBEngine.execute(query);
-
-        } catch (SQLException e) {
+            DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
+            dp.exec(query);
+        } catch (SQLException | ConnectException e) {
             e.printStackTrace();
-            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка обновления строки.", true);
-            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка обновления строки.\n"+e.getMessage(), true);
+//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка обновления строки.", true);
+//            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка обновления строки.\n"+e.getMessage(), true);
             return false;
         }
         return true;
@@ -108,10 +110,12 @@ public abstract class TTable  implements ITableRouter {
         StringBuilder valuesStr=new StringBuilder();
         generateInsertQueryArguments(resultSet, fieldsStr, valuesStr);
         try {
+            DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
+
             String query = getInsertQueryStr(fieldsStr, valuesStr);
-            DBEngine.execute(query);
-        } catch (SQLException e) {
-            ErrorsClass.recordInsertError(e);
+            dp.exec(query);
+        } catch (SQLException | ConnectException e) {
+            //ErrorsClass.recordInsertError(e);
         }
     }
 
@@ -119,12 +123,13 @@ public abstract class TTable  implements ITableRouter {
     public boolean deleteLine(String[] keys) {
         String query=getDeleteLineQuery(keys);
         try {
-            DBEngine.execute(query);
+            DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
+            dp.exec(query);
             //Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Запись IDN="+keys.toString()+" успешно удалена.", true);
-        } catch (SQLException e) {
+        } catch (SQLException | ConnectException e) {
             e.printStackTrace();
-            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка удаления записи. IDN="+keys.toString(), true);
-            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка удаления записи.IDN="+keys.toString()+e.getMessage()+"\n QUERY="+query, true);
+//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка удаления записи. IDN="+keys.toString(), true);
+//            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка удаления записи.IDN="+keys.toString()+e.getMessage()+"\n QUERY="+query, true);
             return false;
         }
         return true;

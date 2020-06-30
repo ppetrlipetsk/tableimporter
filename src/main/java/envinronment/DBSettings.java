@@ -1,4 +1,4 @@
-package databaselib;
+package envinronment;
 
 public class DBSettings {
     public static String instanceName = "localhost\\MSSQLSERVER";

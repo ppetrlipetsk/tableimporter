@@ -1,10 +1,11 @@
 package businesslib;
 
-import databaselib.DBEngine;
-import databaselib.QueryRepository;
-import defines.FieldTypeDefines;
+import com.ppsdevelopment.jdbcprocessor.DataBaseConnector;
+import com.ppsdevelopment.jdbcprocessor.DataBaseProcessor;
+import com.ppsdevelopment.loglib.Logger;
+import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldType;
+import envinronment.QueryRepository;
 import loglib.ErrorsClass;
-import loglib.Logger;
 import loglib.MessagesClass;
 import tableslib.ITableRouter;
 import tableslib.TTable;
@@ -19,17 +20,18 @@ import java.util.Map;
 public class ImportProcessor {
     protected final String QUOTES_SYMBOL="'";
 
-    public  HashMap<String, FieldTypeDefines.FieldType> getAliases(String destinationTable)  {
+    public  HashMap<String, FieldType> getAliases(String destinationTable)  {
 
         String query=QueryRepository.getAliasesQuery().replace("@tablename@",destinationTable);
         AliasesLoader aliasesLoader=new AliasesLoader();
 
         try {
-            DBEngine.resultExpression(query, aliasesLoader);
+            DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
+            dp.query(query,aliasesLoader);
         } catch (SQLException e) {
             e.printStackTrace();
-            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения псевдонимов полей.", true);
-            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения псевдонимов полей.\n"+e.getMessage()+"\n QUERY="+query, true);
+//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения псевдонимов полей.", true);
+//            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения псевдонимов полей.\n"+e.getMessage()+"\n QUERY="+query, true);
         }
         return aliasesLoader.getAliases();
     }
@@ -39,14 +41,14 @@ public class ImportProcessor {
         HashMap<String, FieldStateType> changedRecords=null;
         DifferenceSelectCallBack differenceSelectCallBack=new DifferenceSelectCallBack();
         try {
-
-            DBEngine.resultExpression(query, differenceSelectCallBack);
+            DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
+            dp.query(query,differenceSelectCallBack);
             changedRecords=differenceSelectCallBack.getChangedRecords();
 
         } catch (SQLException e) {
             e.printStackTrace();
-            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения представления, содержащего измененные записи.", true);
-            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения представления, содержащего измененные записи.\n"+e.getMessage()+"\n QUERY="+query, true);
+//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения представления, содержащего измененные записи.", true);
+//            Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения представления, содержащего измененные записи.\n"+e.getMessage()+"\n QUERY="+query, true);
         }
         return changedRecords;
     }
@@ -55,10 +57,12 @@ public class ImportProcessor {
         //String query=QueryRepository.getZMMAddedLines();
         String query=table.getAddedLinesQuery();
         try {
+            DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
+
             AddedSelectCallBack addedSelectCallBack=new AddedSelectCallBack(changedRecords);
-            DBEngine.resultExpression(query, addedSelectCallBack);
+            dp.query(query,addedSelectCallBack);
         } catch (SQLException e) {
-            ErrorsClass.addedRecordsViewReadError(e,query);
+            //ErrorsClass.addedRecordsViewReadError(e,query);
         }
     }
 
@@ -68,11 +72,12 @@ public class ImportProcessor {
 
         LinkedList<String> deletedLines=null;
         try {
+            DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
             DeletedSelectCallBack deletedSelectCallBack= new DeletedSelectCallBack();
-            DBEngine.resultExpression(query, deletedSelectCallBack);
+            dp.query(query,deletedSelectCallBack);
             deletedLines=deletedSelectCallBack.getDeletedRecords();
         } catch (SQLException e) {
-            ErrorsClass.deletedRecordsViewReadError(e,query);
+            //ErrorsClass.deletedRecordsViewReadError(e,query);
         }
         return deletedLines;
     }
@@ -80,11 +85,12 @@ public class ImportProcessor {
     public boolean changeRecords(HashMap<String,FieldStateType> changedRecords, TTable table) {
         //Выбираем только те записи, которые новые или измененные в таблице импорта
         String query=table.getImportDifferenceRecordsQuery(getDiffValuesStr(changedRecords,QUOTES_SYMBOL));
-
+        DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
         try {
-            DBEngine.resultExpression(query, new ImportRecords(changedRecords, table));
+            dp.query(query,new ImportRecords(changedRecords, table));
+            //DBEngine.resultExpression(query, new ImportRecords(changedRecords, table));
         } catch (SQLException e) {
-            ErrorsClass.changeRecordsError(e,query);
+            //ErrorsClass.changeRecordsError(e,query);
         }
         return false;
     }
@@ -95,7 +101,7 @@ public class ImportProcessor {
             String[] keys=table.getKeys(idn);
             if (table.deleteLine(keys)) count++;
         }
-        MessagesClass.deletedRecordCountMessage(count);
+        //MessagesClass.deletedRecordCountMessage(count);
         return count;
     }
 
@@ -122,12 +128,12 @@ public class ImportProcessor {
 
     /** Класс, реализующий интерфейс ResultSetCallBackMethod, реализует механизм получения списка псевдонимов из
      * набора данных результата выполнения запроса.
-     * Возвращает набор псевдонимов типа HashMap<String, FieldTypeDefines.FieldType>
+     * Возвращает набор псевдонимов типа HashMap<String, FieldType>
       */
-    private class AliasesLoader implements DBEngine.ResultSetCallBackMethod {
-        private HashMap<String, FieldTypeDefines.FieldType> aliases;
+    private class AliasesLoader implements DataBaseProcessor.ResultSetCallBack {
+        private HashMap<String, FieldType> aliases;
 
-        public HashMap<String, FieldTypeDefines.FieldType> getAliases() {
+        public HashMap<String, FieldType> getAliases() {
             return aliases;
         }
 
@@ -141,22 +147,22 @@ public class ImportProcessor {
                 try {
                     while (resultSet.next()) {
                         String fieldalias=resultSet.getString("fieldalias");
-                        FieldTypeDefines.FieldType fieldType=TableTools.detectFieldType(resultSet.getString("fieldtype"));
+                        FieldType fieldType=TableTools.detectFieldType(resultSet.getString("fieldtype"));
                         aliases.put(fieldalias, fieldType);
                     }
                 }
                 catch (SQLException e){
-                    Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения поля FIELDALIAS записи БД, при чтении таблицы псевдонимов полей." , true);
-                    Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения поля FIELDALIAS записи БД, при чтении таблицы псевдонимов полей. \n"+e.getMessage(), true);
+//                    Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения поля FIELDALIAS записи БД, при чтении таблицы псевдонимов полей." , true);
+//                    Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения поля FIELDALIAS записи БД, при чтении таблицы псевдонимов полей. \n"+e.getMessage(), true);
                     throw new SQLException(e);
                 }
             }
-            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Чтение таблицы псевдонимов полей... Найдено:"+aliases.size() , true);
+  //          Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Чтение таблицы псевдонимов полей... Найдено:"+aliases.size() , true);
         }
     }
 
 
-    class DifferenceSelectCallBack implements DBEngine.ResultSetCallBackMethod {
+    class DifferenceSelectCallBack implements DataBaseProcessor.ResultSetCallBack {
         private HashMap<String, FieldStateType> changedRecords;
 
         public DifferenceSelectCallBack() {
@@ -177,16 +183,16 @@ public class ImportProcessor {
                 }
                 catch (SQLException e){
                     e.printStackTrace();
-                    Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения поля IDN записи БД." , true);
-                    Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения поля IDN записи БД \n"+e.getMessage(), true);
+//                    Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка чтения поля IDN записи БД." , true);
+//                    Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка чтения поля IDN записи БД \n"+e.getMessage(), true);
                     throw new SQLException(e);
                 }
             }
-            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Определение измененных записей-OK \nНайдено:"+ changedRecords.size(), true);
+//            Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Определение измененных записей-OK \nНайдено:"+ changedRecords.size(), true);
         }
     }
 
-    class AddedSelectCallBack implements DBEngine.ResultSetCallBackMethod {
+    class AddedSelectCallBack implements DataBaseProcessor.ResultSetCallBack {
         private HashMap<String, FieldStateType> changedRecords;
 
         public AddedSelectCallBack(HashMap<String, FieldStateType> changedRecords) {
@@ -208,17 +214,17 @@ public class ImportProcessor {
                     }
                 }
                 catch (SQLException e){
-                    loglib.ErrorsClass.fieldReadErrorLog(e);
+                    //loglib.ErrorsClass.fieldReadErrorLog(e);
                 }
-                loglib.MessagesClass.addedFieldsMessage(count);
+                //loglib.MessagesClass.addedFieldsMessage(count);
             }
-            else
-                loglib.MessagesClass.noAddedFieldsMessage();
+            //else
+                //loglib.MessagesClass.noAddedFieldsMessage();
 
         }
     }
 
-    class DeletedSelectCallBack implements DBEngine.ResultSetCallBackMethod {
+    class DeletedSelectCallBack implements DataBaseProcessor.ResultSetCallBack {
         private LinkedList<String> deletedRecords;
 
         public DeletedSelectCallBack() {
@@ -241,14 +247,14 @@ public class ImportProcessor {
                     }
                 }
                 catch (SQLException e){
-                    ErrorsClass.deletedRecordsReadError(e);
+                    //ErrorsClass.deletedRecordsReadError(e);
                 }
-                MessagesClass.deletedRecordsMessage(count);
+//                MessagesClass.deletedRecordsMessage(count);
             }
         }
     }
 
-    private class ImportRecords implements DBEngine.ResultSetCallBackMethod {
+    private class ImportRecords implements DataBaseProcessor.ResultSetCallBack {
         private HashMap<String, FieldStateType> changedRecords;
         ITableRouter tableRouter;
 
@@ -280,10 +286,10 @@ public class ImportProcessor {
                     }
                 }
                 catch (SQLException e){
-                    ErrorsClass.recordUpdateError(e, idn);
+//                    ErrorsClass.recordUpdateError(e, idn);
                 }
-                MessagesClass.updateRecordsCountMessage(countUpdate);
-                MessagesClass.insertRecordsCountMessage(countAdd);
+  //              MessagesClass.updateRecordsCountMessage(countUpdate);
+    //            MessagesClass.insertRecordsCountMessage(countAdd);
             }
         }
     }

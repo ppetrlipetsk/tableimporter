@@ -1,6 +1,6 @@
 package tableslib;
 
-import databaselib.QueryRepository;
+import envinronment.QueryRepository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
