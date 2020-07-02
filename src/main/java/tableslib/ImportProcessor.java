@@ -1,20 +1,15 @@
-package businesslib;
+package tableslib;
 
 import com.ppsdevelopment.jdbcprocessor.DataBaseConnector;
 import com.ppsdevelopment.jdbcprocessor.DataBaseProcessor;
 import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldType;
 import envinronment.QueryRepository;
-import tableslib.TTable;
-import tableslib.TableHelper;
-import tableslib.TableTools;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.LinkedList;
 
-public class ImportProcessor {
-    protected final String QUOTES_SYMBOL="'";
-
+public class ImportProcessor { protected final String QUOTES_SYMBOL="'";
 
     public  HashMap<String, FieldType> getAliases(String destinationTable) throws SQLException {
         String query=QueryRepository.getAliasesQuery().replace("@tablename@",destinationTable);
@@ -24,7 +19,7 @@ public class ImportProcessor {
             if ((resultSet!=null)) {
                 while (resultSet.next()) {
                     String fieldalias = resultSet.getString("fieldalias");
-                    FieldType fieldType = TableTools.detectFieldType(resultSet.getString("fieldtype"));
+                    FieldType fieldType = TableHelper.detectFieldType(resultSet.getString("fieldtype"));
                     aliases.put(fieldalias, fieldType);
                 }
             }
@@ -34,11 +29,11 @@ public class ImportProcessor {
         }
         return aliases;
     }
-//TODO сделать проверку на существование таблиц и на соответствие полей.
+
     public HashMap<String, FieldStateType> getChangedRecords(String sourceTable, String destinationTable, String removedId, String keyExpression, String idn) throws Exception {
         String query=TableHelper.generateChangedQuery(sourceTable,destinationTable,removedId, keyExpression);
         HashMap<String, FieldStateType> changedRecords=new HashMap<>();
-        try(DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());) {
+        try(DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection())) {
             ResultSet resultSet=dp.query(query);
             if ((resultSet!=null)){
                 while (resultSet.next()) {
@@ -51,9 +46,9 @@ public class ImportProcessor {
         return changedRecords;
     }
 
-    public  HashMap<String,FieldStateType> detectAddedRecords(HashMap<String, FieldStateType> changedRecords, String sourceTable, String DestinationTable, String removedField, String idExpression, String id) throws Exception {
+    public void detectAddedRecords(HashMap<String, FieldStateType> changedRecords, String sourceTable, String DestinationTable, String removedField, String idExpression, String id) throws Exception {
         String query=TableHelper.getAddedRecordsQuery( sourceTable,  DestinationTable,  removedField,  idExpression,  id);
-        try (DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());){
+        try (DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection())){
             ResultSet resultSet=dp.query(query);
             if ((resultSet!=null)){
                     while (resultSet.next()) {
@@ -63,7 +58,6 @@ public class ImportProcessor {
         } catch (SQLException e) {
             throw new Exception("Ошибка определения добавленных записей. Сообщение об ошибке:"+e.toString()+" \nQuery:"+query);
         }
-        return changedRecords;
     }
 
     public LinkedList<String> detectDeletedRecords(String sourceTable, String destinationTable, String removedField, String idExpression, String id,HashMap<String,FieldStateType> changedRecords) throws Exception {
@@ -72,7 +66,7 @@ public class ImportProcessor {
         String sourceIdnView=TableHelper.getIdnViewQuery(sourceTable,removedField,idExpression);
         query=query.replace("%source_idn_view%",sourceIdnView).replace("%destination_idn_view%",destinationIdnView).replace("%dataset%",TableHelper.getDiffValuesStr(changedRecords,QUOTES_SYMBOL));
         LinkedList<String> deletedLines=new LinkedList<>();
-        try (DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());) {
+        try (DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection())) {
             ResultSet resultSet = dp.query(query);
             if ((resultSet != null)) {
                 while (resultSet.next()) {
@@ -89,7 +83,6 @@ public class ImportProcessor {
 
     public int[] changeRecords(HashMap<String, FieldStateType> changedRecords, TTable table, String sourcetable, String removedFields, String idExpression) throws Exception {
         //Выбираем только те записи, которые новые или измененные в таблице импорта
-        //String query=table.getImportDifferenceRecordsQuery(getDiffValuesStr(changedRecords,QUOTES_SYMBOL));
         int addedCount=0;
         int changedCount=0;
         String query=QueryRepository.getDestinationImportDifferenceRecords();
@@ -131,6 +124,31 @@ public class ImportProcessor {
         }
         return count;
     }
+
+    public boolean isFieldsSetEquals(String table1, String table2, String exclude){
+        FieldsSet fields1=getTableFields(table1,exclude);
+        FieldsSet fields2=getTableFields(table2,exclude);
+        return fields1.equals(fields2);
+    }
+
+    private FieldsSet getTableFields(String table, String exclude) {
+        FieldsSet fields=new FieldsSet();
+        try(DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection())) {
+            String query = QueryRepository.getTableFieldsQuery(table,exclude);
+            ResultSet resultSet=dp.query(query);
+            if (resultSet!=null){
+                while (resultSet.next()){
+                    String fname=resultSet.getString("fname");
+                    Integer fieldType=resultSet.getInt("fieldtype");
+                    fields.put(fname,fieldType);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return fields;
+    }
+
 
     public enum FieldStateType{
         INSERT,UPDATE

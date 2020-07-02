@@ -1,10 +1,8 @@
 /*
-
 Программа предназначена для импорта одной таблицы в другую.
-
  */
 
-import businesslib.ImportProcessor;
+import tableslib.ImportProcessor;
 import com.ppsdevelopment.jdbcprocessor.DataBaseConnector;
 import com.ppsdevelopment.loglib.Logger;
 import com.ppsdevelopment.programparameters.ProgramParameters;
@@ -37,24 +35,17 @@ public class MainClass {
 
                         table.setAliases(aliases);
 
-                        //changedRecords=importProcessor.getChangedRecords(table);
-                        changedRecords=importProcessor.getChangedRecords(ProgramParameters.getParameterValue("sourcetable"), ProgramParameters.getParameterValue("destinationtable"),"id","LTRIM(STR(potrebnost_pen)) + '_' + LTRIM(RTRIM(STR(pozitsiya_potrebnosti_pen))) AS idn", "idn");
+                        if (!importProcessor.isFieldsSetEquals(ProgramParameters.getParameterValue("sourcetable"),ProgramParameters.getParameterValue("destinationtable"),"'id','deleted'"))
+                            throw new Exception("Несовпадение наборов полей для таблиц БД.");
 
-                        importProcessor.detectAddedRecords(changedRecords,ProgramParameters.getParameterValue("sourcetable"), ProgramParameters.getParameterValue("destinationtable"),"id","LTRIM(STR(potrebnost_pen)) + '_' + LTRIM(RTRIM(STR(pozitsiya_potrebnosti_pen))) AS idn", "idn");
-
-                        deletedRecords=importProcessor.detectDeletedRecords(ProgramParameters.getParameterValue("sourcetable"), ProgramParameters.getParameterValue("destinationtable"),"id","LTRIM(STR(potrebnost_pen)) + '_' + LTRIM(RTRIM(STR(pozitsiya_potrebnosti_pen))) AS idn", "idn",changedRecords);
-
-                        // MessagesClass.importProcessMessageBegin();
-
-                        int[] counts=importProcessor.changeRecords(changedRecords, table,ProgramParameters.getParameterValue("sourcetable"),"id","LTRIM(STR(potrebnost_pen)) + '_' + LTRIM(RTRIM(STR(pozitsiya_potrebnosti_pen))) AS idn");
-
+                        changedRecords=importProcessor.getChangedRecords(ProgramParameters.getParameterValue("sourcetable"), ProgramParameters.getParameterValue("destinationtable"),"id",table.getKeyExpression(), table.getKeyName());
+                        importProcessor.detectAddedRecords(changedRecords,ProgramParameters.getParameterValue("sourcetable"), ProgramParameters.getParameterValue("destinationtable"),"id",table.getKeyExpression(), table.getKeyName());
+                        deletedRecords=importProcessor.detectDeletedRecords(ProgramParameters.getParameterValue("sourcetable"), ProgramParameters.getParameterValue("destinationtable"),"id",table.getKeyExpression(), table.getKeyName(),changedRecords);
+                        int[] counts=importProcessor.changeRecords(changedRecords, table,ProgramParameters.getParameterValue("sourcetable"),"id",table.getKeyExpression());
                         int delCount=importProcessor.delRecords(deletedRecords,table);
 
                         Logger.putLineToLog(ApplicationGlobals.getAPPLOGName(), "Изменено:" + counts[1]+", добавлено:" +counts[0]+", удалено:"+delCount+" записей. \n Импорт завершен успешно.", true);
                         Logger.putLineToLog(ApplicationGlobals.getAPPLOGName(), "Время завершения:" + new Date().toString(), true);
-
-                        //MessagesClass.importProcessMessageEnd();
-
                     } catch (SQLException e) {
                         e.printStackTrace();
                     }
@@ -79,7 +70,7 @@ public class MainClass {
 
     }
 
-    static TTable createTableInstance(String className) throws Exception {
+    private static TTable createTableInstance(String className) throws Exception {
         Class<TTable> tableClass;
         TTable table;
         if ((className==null)||(className.length()==0))

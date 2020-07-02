@@ -15,6 +15,8 @@ public class ApplicationInitializer {
         initProgramParametersValues();
         if (!importProgramParameters(args)) return false;
         if (!importConfigParameters()) return false;
+        ApplicationGlobals.setAPPLOGName(ProgramParameters.getParameterValue("applog"));
+        ApplicationGlobals.setERRORLOGName(ProgramParameters.getParameterValue("errorlog"));
         Logger.createLoggers(new String[]{ApplicationGlobals.getAPPLOGName(),ApplicationGlobals.getERRORLOGName()}, ApplicationGlobals.getLINESLIMIT());
         dataBaseConnection();
         return true;

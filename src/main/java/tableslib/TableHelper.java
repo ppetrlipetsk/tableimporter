@@ -1,10 +1,10 @@
 package tableslib;
 
-import businesslib.ImportProcessor;
 import com.ppsdevelopment.jdbcprocessor.DataBaseConnector;
 import com.ppsdevelopment.jdbcprocessor.DataBaseProcessor;
+import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldType;
+import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldTypeDefines;
 import envinronment.QueryRepository;
-
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -17,7 +17,7 @@ public class TableHelper {
     /**
      *Возвращает строку, содержащую набор полей таблицы БД, разделенных запятой
      */
-    public static String getTableFieldsLine(LinkedList<String> fields, String idExpression){
+    private static String getTableFieldsLine(LinkedList<String> fields, String idExpression){
         boolean deleted=false;
         if (fields.contains("deleted")) {
             deleted=true;
@@ -39,12 +39,12 @@ public class TableHelper {
         return QueryRepository.getIdnDifferenceViewQuery(view_from,view_to);
     }
 
-    public static String addDeletedField(String tableFieldsLine) {
+    private static String addDeletedField(String tableFieldsLine) {
         if (!tableFieldsLine.contains("deleted")) tableFieldsLine+=", 0 as deleted";
         return tableFieldsLine;
     }
 
-    public static LinkedList<String> getTableFields(String table, String key) throws SQLException {
+    private static LinkedList<String> getTableFields(String table, String key) throws SQLException {
         String query=QueryRepository.getTableFieldsQuery(table);
         DataBaseProcessor dp=new DataBaseProcessor(DataBaseConnector.getConnection());
         ResultSet resultSet=dp.query(query);
@@ -59,7 +59,7 @@ public class TableHelper {
         return list;
     }
     public static String getAddedRecordsQuery(String sourceTable, String destinationTable, String removedField, String idExpression, String id) throws Exception {
-        String query=QueryRepository.getAddedRecordsQuery();
+        String query=QueryRepository.getAddedRecordsQuery().replace("%idn%",id);
         String dv=TableHelper.generateChangedQuery(sourceTable,destinationTable,removedField, idExpression);
         String iv=getIdnViewQuery(destinationTable,removedField, idExpression);
         return query.replace("%difference_view%",dv).replace("%idn_view%",iv);
@@ -67,9 +67,10 @@ public class TableHelper {
 
     public static String getIdnViewQuery(String tableName, String removedField, String idExpression) throws SQLException {
         String query="select %fields% from "+tableName;
-        String fields=TableHelper.addDeletedField(getTableFieldsLine(getTableFields(tableName,removedField),idExpression));;
+        String fields=TableHelper.addDeletedField(getTableFieldsLine(getTableFields(tableName,removedField),idExpression));
         return query.replace("%fields%",fields);
     }
+
 
 
     /**
@@ -87,5 +88,16 @@ public class TableHelper {
         return line.toString();
     }
 
+    public static FieldType detectFieldType(String fieldtype) {
+        return FieldType.valueOf(fieldtype);
+    }
+
+    private String getFieldValueStr(FieldType fieldType, String valueStr ){
+        String mask= FieldTypeDefines.getTypesFieldDBMask().get(fieldType);
+        if (valueStr==null)
+            return "null";
+        else
+            return mask.replace("@value@", valueStr);
+    }
 
 }

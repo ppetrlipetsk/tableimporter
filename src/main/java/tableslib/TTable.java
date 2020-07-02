@@ -4,8 +4,6 @@ import com.ppsdevelopment.jdbcprocessor.DataBaseConnector;
 import com.ppsdevelopment.jdbcprocessor.DataBaseProcessor;
 import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldType;
 import com.ppsdevelopment.tmcprocessor.tmctypeslib.FieldTypeDefines;
-import envinronment.QueryRepository;
-import loglib.ErrorsClass;
 
 import java.net.ConnectException;
 import java.sql.ResultSet;
@@ -24,12 +22,12 @@ public abstract class TTable  implements ITableRouter {
         return destinationTable;
     }
 
-    public TTable(String destinationTable) {
+    TTable(String destinationTable) {
       //  this.sourceTable = sourceTable;
         this.destinationTable=destinationTable;
     }
 
-    protected boolean generateInsertQueryArguments(ResultSet resultSet, StringBuilder fieldsStr, StringBuilder valuesStr) {
+    private void generateInsertQueryArguments(ResultSet resultSet, StringBuilder fieldsStr, StringBuilder valuesStr) throws SQLException {
         for (Map.Entry<String, FieldType> alias: aliases.entrySet()){
             String fieldName=alias.getKey();
             FieldType fieldType=alias.getValue();
@@ -39,28 +37,18 @@ public abstract class TTable  implements ITableRouter {
             try {
                 valuesStr.append(getFieldValueStr(fieldType,resultSet.getString(fieldName)));
             } catch (SQLException e) {
-                e.printStackTrace();
-//                Logger.putLineToLogs(new String[] {Logger.APPLOG}, "Ошибка генерирования выражения вставки строки. FieldName="+fieldName, true);
-//                Logger.putLineToLogs(new String[] {Logger.ERRORLOG}, "Ошибка генерирования выражения вставки строки. FieldName="+fieldName+"\n"+e.getMessage(), true);
-                return false;
+                throw new SQLException("Ошибка генерирования выражения вставки строки. FieldName="+fieldName+"\n"+e.toString());
             }
         }
-        return true;
     }
 
-    protected String getUpdateQueryValues(ResultSet resultSet) throws SQLException {
+    private String getUpdateQueryValues(ResultSet resultSet) throws SQLException {
 
         StringBuilder valuesStr=new StringBuilder();
 
         for (Map.Entry<String, FieldType> alias: aliases.entrySet()){
             String fieldName=alias.getKey();
-            String c=resultSet.getString(fieldName);
             FieldType fieldType=alias.getValue();
-//            if (fieldName.equals("potrebnost_pen"))
-//                if (c.equals("4000052290"))
-//                System.out.println("stop");
-
-
             if (valuesStr.length()>0){
                 valuesStr.append(",");
             }
@@ -70,7 +58,7 @@ public abstract class TTable  implements ITableRouter {
         return valuesStr.toString();
     }
 
-    protected String getFieldValueStr(FieldType fieldType,String valueStr ){
+    private String getFieldValueStr(FieldType fieldType, String valueStr){
         String mask= FieldTypeDefines.getFieldMaskStrByType(fieldType);
         if (valueStr==null)
             return "null";
@@ -124,17 +112,11 @@ public abstract class TTable  implements ITableRouter {
 
     abstract String getDeleteLineQuery(String[] keys);
 
-/*
-    public abstract String getDifferenceViewQuery();
-
-    public abstract String getAddedLinesQuery();
-
-    public abstract String getDeletedRecordsQuery(String changedRecords);
-
-    public abstract String getImportDifferenceRecordsQuery(String range);
-*/
+    public abstract String getKeyExpression();
 
     protected abstract String getUpdateQueryFromTable(ResultSet resultSet) throws SQLException;
 
     public abstract String[] getKeys(String idn);
+
+    public abstract String getKeyName();
 }

@@ -2,8 +2,8 @@ package envinronment;
 
 public class ApplicationGlobals {
     private static final int LINESLIMIT = 2;
-    private static final String ERRORLOGName = "errorlog";
-    private static final String APPLOGName = "applog";
+    private static String ERRORLOGName = "errorlog";
+    private static String APPLOGName = "applog";
 
     private static String instanceName;// = "localhost\\MSSQLSERVER";
     private static String databaseName;// = "dogc";
@@ -57,5 +57,13 @@ public class ApplicationGlobals {
 
     public static String getConnectionUrl() {
         return connectionUrl;
+    }
+
+    public static void setERRORLOGName(String ERRORLOGName) {
+        ApplicationGlobals.ERRORLOGName = ERRORLOGName;
+    }
+
+    public static void setAPPLOGName(String APPLOGName) {
+        ApplicationGlobals.APPLOGName = APPLOGName;
     }
 }

@@ -20,31 +20,11 @@ public class PPS_Table extends TTable {
         return QueryRepository.getPPSDeleteQuery().replace("@idn@",keys[0]);
     }
 
-/*
     @Override
-    public String getAddedLinesQuery() {
-        return QueryRepository.getPPSAddedLines();
+    public String getKeyExpression() {
+        return "idn";
     }
 
-    @Override
-    public String getDifferenceViewQuery() {
-        return QueryRepository.getPPSDifferenceView();
-    }
-
-    @Override
-    public String getDeletedRecordsQuery(String changedRecords) {
-        String query=QueryRepository.getPPSDeletedLines();
-        if (changedRecords.length()>0) query= query.replace("@dataset@"," idn not in (@dataset@) and");
-        query=query.replace("@dataset@",changedRecords);
-        return query;
-    }
-*/
-/*
-    @Override
-    public String getImportDifferenceRecordsQuery(String range) {
-        return QueryRepository.getPPSImportDifRecords().replace("@range@",range);
-    }
-*/
 
 
     @Override
@@ -56,5 +36,10 @@ public class PPS_Table extends TTable {
     @Override
     public String[] getKeys(String idn) {
         return new String[] {idn};
+    }
+
+    @Override
+    public String getKeyName() {
+        return "idn";
     }
 }
